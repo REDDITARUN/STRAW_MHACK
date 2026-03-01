@@ -1,0 +1,31 @@
+{
+  "config_path": "experiments/configs/lora_config_b_straw.yaml",
+  "base_model": "mistralai/Mistral-7B-Instruct-v0.3",
+  "datasets": [
+    "samsum_gen",
+    "dolly_gen",
+    "codealpaca_gen"
+  ],
+  "train_split": "train",
+  "eval_split": "validation",
+  "straw_rank": 8,
+  "num_layers": 32,
+  "v_proj_in": 4096,
+  "v_proj_out": 1024,
+  "hypernet": {
+    "model_type": "cnn",
+    "hidden_size": 32,
+    "num_hidden_layers": 1,
+    "num_attention_heads": 2,
+    "kernel_size": 3,
+    "layer_stride": 2,
+    "dropout": 0.0
+  },
+  "training": {
+    "per_device_train_batch_size": 2,
+    "gradient_accumulation_steps": 8,
+    "learning_rate": 0.0001,
+    "num_train_epochs": 1,
+    "warmup_ratio": 0.03
+  }
+}

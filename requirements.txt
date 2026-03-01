@@ -1,0 +1,12 @@
+datasets
+tqdm
+pyyaml
+torch
+transformers
+peft
+accelerate
+torchinfo
+wandb
+python-dotenv
+matplotlib
+imageio
