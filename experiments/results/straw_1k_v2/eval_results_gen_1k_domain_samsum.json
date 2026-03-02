@@ -1,0 +1,8 @@
+{
+  "samsum_gen": {
+    "metric": "rougeL",
+    "score": 0.42739469040890776,
+    "num_samples": 100
+  },
+  "macro_avg_score": 0.42739469040890776
+}

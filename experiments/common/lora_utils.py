@@ -26,6 +26,7 @@ class LoraTrainConfig:
     lora_alpha: int
     lora_dropout: float
     target_modules: list[str]
+    lr_scheduler_type: str = "cosine"
 
 
 def load_config(path: str) -> LoraTrainConfig:

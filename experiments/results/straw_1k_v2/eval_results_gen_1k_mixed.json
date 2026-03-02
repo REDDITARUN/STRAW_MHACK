@@ -1,0 +1,18 @@
+{
+  "samsum_gen": {
+    "metric": "rougeL",
+    "score": 0.3931381928815331,
+    "num_samples": 100
+  },
+  "dolly_gen": {
+    "metric": "token_f1",
+    "score": 0.34087931744572497,
+    "num_samples": 100
+  },
+  "codealpaca_gen": {
+    "metric": "exact_match_norm",
+    "score": 0.05,
+    "num_samples": 100
+  },
+  "macro_avg_score": 0.261339170109086
+}

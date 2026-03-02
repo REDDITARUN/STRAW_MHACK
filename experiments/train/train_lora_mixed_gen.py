@@ -170,6 +170,7 @@ def main() -> None:
             "lora_alpha": cfg.lora_alpha,
             "lora_dropout": cfg.lora_dropout,
             "learning_rate": cfg.learning_rate,
+            "lr_scheduler_type": cfg.lr_scheduler_type,
             "num_train_epochs": cfg.num_train_epochs,
         },
     )
@@ -182,6 +183,7 @@ def main() -> None:
         per_device_eval_batch_size=cfg.per_device_train_batch_size,
         gradient_accumulation_steps=cfg.gradient_accumulation_steps,
         learning_rate=cfg.learning_rate,
+        lr_scheduler_type=cfg.lr_scheduler_type,
         num_train_epochs=cfg.num_train_epochs,
         warmup_ratio=cfg.warmup_ratio,
         logging_steps=cfg.logging_steps,

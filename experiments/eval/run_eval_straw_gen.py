@@ -92,6 +92,7 @@ def load_components(args: argparse.Namespace) -> tuple[Any, Any, Any, DynamicVPr
 
     injector = DynamicVProjInjector(model)
     injector.install()
+    args.lora_alpha = cfg.get("lora_alpha", None)
     return model, tokenizer, hypernet, injector
 
 
@@ -117,6 +118,7 @@ def infer_text(
     max_new_tokens: int,
     temperature: float,
     ba_downsample: int,
+    lora_alpha: float | None,
 ) -> tuple[str, dict[int, torch.Tensor]]:
     prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     inputs = tokenizer(prompt, return_tensors="pt")
@@ -131,7 +133,7 @@ def infer_text(
     hyper_dtype = next(hypernet.parameters()).dtype
     prefix_hidden = prefix_hidden.to(dtype=hyper_dtype)
     h_out = hypernet(prefix_hidden)
-    dynamic_state = hypernet_to_layer_lora(h_out)
+    dynamic_state = hypernet_to_layer_lora(h_out, lora_alpha=lora_alpha)
     injector.set_state(dynamic_state)
     output_ids = model.generate(
         **inputs,
@@ -147,6 +149,7 @@ def infer_text(
         dynamic_state.layer_a,
         dynamic_state.layer_b,
         downsample=ba_downsample,
+        scale=dynamic_state.scale,
     )
 
 
@@ -162,6 +165,7 @@ def evaluate_dataset(
     temperature: float,
     limit: int,
     ba_downsample: int,
+    lora_alpha: float | None,
 ) -> dict[str, Any]:
     rows = load_dataset_split(dataset, split, data_root)
     if limit > 0:
@@ -182,6 +186,7 @@ def evaluate_dataset(
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             ba_downsample=ba_downsample,
+            lora_alpha=lora_alpha,
         )
         metric_name = metric_name_from_sample(row)
         scores.append(score_sample(pred, target, metric_name))
@@ -244,6 +249,7 @@ def main() -> None:
             temperature=args.temperature,
             limit=args.limit,
             ba_downsample=args.ba_downsample,
+            lora_alpha=getattr(args, "lora_alpha", None),
         )
         ba_payload["datasets"][dataset] = {
             "ba_mean_by_layer": metrics.pop("ba_mean_by_layer"),
@@ -255,13 +261,13 @@ def main() -> None:
             run,
             {
                 f"{pref}/score": metrics["score"],
-                f"{pref}/metric": metrics["metric"],
                 f"{pref}/num_examples": metrics["num_examples"],
             },
         )
 
     if results["datasets"]:
         results["macro_avg_score"] = mean(x["score"] for x in results["datasets"])
+        log_metrics(run, {"eval/macro_avg_score": results["macro_avg_score"]})
 
     out_path = Path(args.output_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)

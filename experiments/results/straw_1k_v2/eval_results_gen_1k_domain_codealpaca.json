@@ -1,0 +1,8 @@
+{
+  "codealpaca_gen": {
+    "metric": "exact_match_norm",
+    "score": 0.1,
+    "num_samples": 100
+  },
+  "macro_avg_score": 0.1
+}

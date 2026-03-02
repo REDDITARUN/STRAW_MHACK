@@ -18,12 +18,14 @@ class DynamicAdapterState:
 
     layer_a: dict[int, torch.Tensor]
     layer_b: dict[int, torch.Tensor]
+    scale: float = 1.0
 
 
-def hypernet_to_layer_lora(h: HypernetOutput) -> DynamicAdapterState:
+def hypernet_to_layer_lora(h: HypernetOutput, lora_alpha: float | None = None) -> DynamicAdapterState:
     """
     Convert hypernetwork output to per-layer LoRA matrices for v_proj.
     A: [B, L, R, in], B: [B, L, out, R]
+    scale = alpha/rank (standard LoRA scaling); defaults to 1.0 if alpha not given.
     """
     batch, num_layers, rank, v_proj_in = h.a.shape
     _b2, _l2, v_proj_out, _r2 = h.b.shape
@@ -33,13 +35,15 @@ def hypernet_to_layer_lora(h: HypernetOutput) -> DynamicAdapterState:
     if v_proj_in <= 0 or v_proj_out <= 0:
         raise ValueError("Invalid v_proj dimensions in hypernetwork output.")
 
+    scale = float(lora_alpha) / rank if lora_alpha is not None else 1.0
+
     layer_a: dict[int, torch.Tensor] = {}
     layer_b: dict[int, torch.Tensor] = {}
     for layer_idx in range(num_layers):
         layer_a[layer_idx] = h.a[:, layer_idx]
         layer_b[layer_idx] = h.b[:, layer_idx]
 
-    return DynamicAdapterState(layer_a=layer_a, layer_b=layer_b)
+    return DynamicAdapterState(layer_a=layer_a, layer_b=layer_b, scale=scale)
 
 
 class DynamicVProjInjector:
@@ -88,7 +92,7 @@ class DynamicVProjInjector:
                         b = b.to(device=x.device, dtype=x.dtype)
                     # x: [B,S,in], A: [B,R,in], B: [B,out,R] -> [B,S,out]
                     lora_out = torch.einsum("bsi,bri,bor->bso", x, a, b)
-                    return output + lora_out
+                    return output + self.state.scale * lora_out
 
                 return hook
 

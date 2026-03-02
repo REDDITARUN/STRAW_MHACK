@@ -123,10 +123,17 @@ def main() -> None:
         rows = load_dataset_split(ds, args.split, args.data_root)
         ds_result = evaluate_dataset(model, tokenizer, rows, args)
         results[ds] = ds_result
-        log_metrics(run, {f"{ds}/{ds_result['metric']}": ds_result["score"]})
+        log_metrics(
+            run,
+            {
+                f"eval/{ds}/score": ds_result["score"],
+                f"eval/{ds}/num_samples": ds_result["num_samples"],
+            },
+        )
 
     if results:
         results["macro_avg_score"] = mean(v["score"] for v in results.values() if isinstance(v, dict))
+        log_metrics(run, {"eval/macro_avg_score": results["macro_avg_score"]})
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(results, indent=2), encoding="utf-8")

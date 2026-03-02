@@ -23,7 +23,7 @@ bash experiments/runs/main_gen_1k.sh
 Environment overrides:
 
 ```bash
-RUN_TAG=run_a TRAIN_SAMPLES=1000 EVAL_SAMPLES=100 TEST_SAMPLES=100 MAX_NEW_TOKENS=128 bash experiments/runs/main_gen_1k.sh
+RUN_TAG=run_a TRAIN_SAMPLES=1000 EVAL_SAMPLES=100 TEST_SAMPLES=100 MAX_NEW_TOKENS=256 CODE_MAX_NEW_TOKENS=256 bash experiments/runs/main_gen_1k.sh
 ```
 
 All run outputs are grouped under:
@@ -60,6 +60,45 @@ Training runs primarily log loss/scheduler stats.
 Evaluation runs log per-dataset scores and macro average:
 - `eval/<dataset>/score`
 - `eval/macro_avg_score`
+
+## Current STRAW Defaults
+
+From `experiments/configs/lora_config_b_straw.yaml`:
+- `model_type: cnn`
+- `straw_rank: 16`
+- `lora_alpha: 16`
+- `layer_stride: 1`
+- `learning_rate: 3.0e-5`
+- `num_train_epochs: 5`
+- `warmup_ratio: 0.05`
+
+From `experiments/configs/lora_config_a.yaml` (LoRA baselines):
+- `num_train_epochs: 5`
+- `warmup_ratio: 0.05`
+- `lr_scheduler_type: cosine`
+
+## Latest Run Snapshot (`straw_1k_v2`)
+
+Results are saved under `experiments/results/straw_1k_v2`.
+
+| Model | SAMSum | Dolly | CodeAlpaca | Macro Avg |
+|---|---:|---:|---:|---:|
+| Base | 0.1974 | 0.2446 | 0.0000 | 0.1474 |
+| Mixed LoRA | 0.3931 | 0.3409 | 0.0500 | 0.2613 |
+| STRAW | 0.4007 | 0.3412 | 0.0500 | 0.2640 |
+
+Domain LoRA in-domain references:
+- SAMSum adapter: `0.4274`
+- Dolly adapter: `0.3619`
+- CodeAlpaca adapter: `0.1000`
+
+BA visualization outputs:
+- `experiments/results/straw_1k_v2/ba_viz_1k`
+- `experiments/results/straw_1k_v2/ba_compare_1k`
+- `experiments/results/straw_1k_v2/ba_fancy_3d_1k`
+
+Presentation-ready report:
+- `experiments/results/straw_1k_v2/NOTION_REPORT.md`
 
 ## BA Visualization Commands
 
@@ -109,6 +148,4 @@ python3 -m experiments.report.ba_fancy_3d \
 
 ## Notes
 
-- STRAW config currently uses `layer_stride: 2`, so active layers are even indices (`0, 2, ..., 30`).
-- With this setting, layer `31` is intentionally inactive (near-zero BA expected).
 - Use `python3 -m ...` from repo root to avoid import path issues.

@@ -87,9 +87,11 @@ def dynamic_state_to_ba_heatmaps(
     layer_b: dict[int, torch.Tensor],
     *,
     downsample: int = 64,
+    scale: float = 1.0,
 ) -> dict[int, torch.Tensor]:
     """
     Convert dynamic layer A/B to compressed BA heatmaps.
+    Effective delta uses scale * (B @ A), matching LoRA alpha/rank scaling.
     Expects batch size 1 during eval generation.
     """
     out: dict[int, torch.Tensor] = {}
@@ -98,6 +100,6 @@ def dynamic_state_to_ba_heatmaps(
         b = layer_b[layer_idx]  # [B, out, r]
         if a.shape[0] < 1 or b.shape[0] < 1:
             continue
-        ba = torch.matmul(b[0], a[0])  # [out, in]
+        ba = float(scale) * torch.matmul(b[0], a[0])  # [out, in]
         out[layer_idx] = compress_2d(ba, out_size=downsample)
     return out

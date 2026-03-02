@@ -42,6 +42,7 @@ class TinyBertLayerGenerator(nn.Module):
         self.v_proj_in = v_proj_in
         self.v_proj_out = v_proj_out
 
+        self.input_norm = nn.LayerNorm(residual_dim)
         self.input_proj = nn.Linear(residual_dim, bert_hidden_size)
         config = BertConfig(
             vocab_size=1,  # unused because we pass inputs_embeds; keep tiny to save params
@@ -56,9 +57,15 @@ class TinyBertLayerGenerator(nn.Module):
         self.bert = BertModel(config)
         self.head_a = nn.Linear(bert_hidden_size, rank * v_proj_in)
         self.head_b = nn.Linear(bert_hidden_size, v_proj_out * rank)
+        # A: small normal init (matches standard LoRA A-matrix scale).
+        # B: zero-init so the initial LoRA delta B@A = 0.
+        nn.init.normal_(self.head_a.weight, std=0.02)
+        nn.init.zeros_(self.head_a.bias)
+        nn.init.zeros_(self.head_b.weight)
+        nn.init.zeros_(self.head_b.bias)
 
     def forward(self, layer_input: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        x = self.input_proj(layer_input).unsqueeze(1)  # [B,1,H]
+        x = self.input_proj(self.input_norm(layer_input)).unsqueeze(1)  # [B,1,H]
         encoded = self.bert(inputs_embeds=x).last_hidden_state
         pooled = encoded.mean(dim=1)  # [B,H]
 
@@ -191,6 +198,7 @@ class CnnHyperLoraGenerator(nn.Module):
         if not self.active_layers:
             raise ValueError("No active layers selected for hypernetwork generation.")
 
+        self.input_norm = nn.LayerNorm(residual_dim)
         self.input_proj = nn.Linear(residual_dim, conv_hidden_size)
         self.layer_embed = nn.Embedding(num_layers, conv_hidden_size)
         self.blocks = nn.ModuleList(
@@ -211,6 +219,12 @@ class CnnHyperLoraGenerator(nn.Module):
         self.norm = nn.LayerNorm(conv_hidden_size)
         self.head_a = nn.Linear(conv_hidden_size, rank * v_proj_in)
         self.head_b = nn.Linear(conv_hidden_size, v_proj_out * rank)
+        # A: small normal init (matches standard LoRA A-matrix scale).
+        # B: zero-init so the initial LoRA delta B@A = 0.
+        nn.init.normal_(self.head_a.weight, std=0.02)
+        nn.init.zeros_(self.head_a.bias)
+        nn.init.zeros_(self.head_b.weight)
+        nn.init.zeros_(self.head_b.bias)
 
     def forward(self, prefix_hidden: torch.Tensor) -> HypernetOutput:
         if prefix_hidden.dim() == 2:
@@ -223,7 +237,7 @@ class CnnHyperLoraGenerator(nn.Module):
             )
 
         # [B, L, H] -> [B, C, L]
-        x = self.input_proj(prefix_hidden).transpose(1, 2)
+        x = self.input_proj(self.input_norm(prefix_hidden)).transpose(1, 2)
         for block in self.blocks:
             x = x + block(x)
         x = x.transpose(1, 2)  # [B, L, C]

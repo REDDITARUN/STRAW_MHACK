@@ -1,0 +1,29 @@
+{
+  "base_model": "mistralai/Mistral-7B-Instruct-v0.3",
+  "hypernet_ckpt": "models/checkpoints/straw/straw_1k_v2/best_hypernet.pt",
+  "split": "test",
+  "datasets": [
+    {
+      "dataset": "samsum_gen",
+      "split": "test",
+      "metric": "rougeL",
+      "score": 0.40074112282350166,
+      "num_examples": 100
+    },
+    {
+      "dataset": "dolly_gen",
+      "split": "test",
+      "metric": "token_f1",
+      "score": 0.34117942884256247,
+      "num_examples": 100
+    },
+    {
+      "dataset": "codealpaca_gen",
+      "split": "test",
+      "metric": "exact_match_norm",
+      "score": 0.05,
+      "num_examples": 100
+    }
+  ],
+  "macro_avg_score": 0.2639735172220214
+}

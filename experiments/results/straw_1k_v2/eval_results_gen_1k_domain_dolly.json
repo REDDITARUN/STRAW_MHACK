@@ -1,0 +1,8 @@
+{
+  "dolly_gen": {
+    "metric": "token_f1",
+    "score": 0.3619474005982775,
+    "num_samples": 100
+  },
+  "macro_avg_score": 0.3619474005982775
+}

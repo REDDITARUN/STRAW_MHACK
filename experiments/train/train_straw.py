@@ -8,7 +8,7 @@ from typing import Any
 import torch
 import yaml
 from datasets import Dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer, DataCollatorForSeq2Seq, set_seed
+from transformers import AutoModelForCausalLM, AutoTokenizer, DataCollatorForSeq2Seq, get_cosine_schedule_with_warmup, set_seed
 
 from experiments.common.data_utils_gen import GEN_DATASETS, load_dataset_split
 from experiments.common.observability import (
@@ -154,6 +154,7 @@ def mean_loss(
     injector: DynamicVProjInjector,
     loader: Any,
     device: torch.device,
+    lora_alpha: float | None = None,
 ) -> float:
     model.eval()
     hypernet.eval()
@@ -174,7 +175,7 @@ def mean_loss(
             prefix_hidden = prefix_hidden.to(dtype=hyper_dtype)
 
             h_out = hypernet(prefix_hidden)
-            injector.set_state(hypernet_to_layer_lora(h_out))
+            injector.set_state(hypernet_to_layer_lora(h_out, lora_alpha=lora_alpha))
             out = model(
                 input_ids=batch["input_ids"],
                 attention_mask=batch["attention_mask"],
@@ -195,6 +196,7 @@ def main() -> None:
     base_model = cfg["base_model"]
     max_length = int(cfg.get("max_length", 1024))
     straw_rank = int(cfg.get("straw_rank", 8))
+    lora_alpha = cfg.get("lora_alpha", None)
     train_cfg = cfg.get("training", {})
     hyper_cfg = cfg.get("hypernet", {})
 
@@ -281,13 +283,25 @@ def main() -> None:
     trainable_params = sum(p.numel() for p in hypernet.parameters() if p.requires_grad)
     log_metrics(run, {"params/trainable": trainable_params})
 
+    grad_acc_steps = int(train_cfg.get("gradient_accumulation_steps", 8))
+    num_epochs = int(train_cfg.get("num_train_epochs", 1))
+    max_grad_norm = float(train_cfg.get("max_grad_norm", 0.3))
+    warmup_ratio = float(train_cfg.get("warmup_ratio", 0.03))
+
     optimizer = torch.optim.AdamW(
         hypernet.parameters(),
         lr=float(train_cfg.get("learning_rate", 1.0e-4)),
     )
-    grad_acc_steps = int(train_cfg.get("gradient_accumulation_steps", 8))
-    num_epochs = int(train_cfg.get("num_train_epochs", 1))
-    max_grad_norm = float(train_cfg.get("max_grad_norm", 1.0))
+
+    steps_per_epoch = len(train_loader) // grad_acc_steps
+    total_steps = steps_per_epoch * num_epochs
+    warmup_steps = max(1, int(total_steps * warmup_ratio))
+    scheduler = get_cosine_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=warmup_steps,
+        num_training_steps=total_steps,
+    )
+
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     best_ckpt_path = out_dir / "best_hypernet.pt"
@@ -301,6 +315,8 @@ def main() -> None:
         hypernet.train()
         running_loss = 0.0
 
+        window_loss = 0.0
+        window_steps = 0
         for step, batch in enumerate(train_loader, start=1):
             batch = batch_to_device(batch, device)
 
@@ -317,7 +333,7 @@ def main() -> None:
             prefix_hidden = prefix_hidden.to(dtype=hyper_dtype)
 
             h_out = hypernet(prefix_hidden)
-            injector.set_state(hypernet_to_layer_lora(h_out))
+            injector.set_state(hypernet_to_layer_lora(h_out, lora_alpha=lora_alpha))
 
             out = model(
                 input_ids=batch["input_ids"],
@@ -328,20 +344,27 @@ def main() -> None:
             loss = out.loss / grad_acc_steps
             loss.backward()
             running_loss += float(loss.item() * grad_acc_steps)
+            window_loss += float(loss.item() * grad_acc_steps)
+            window_steps += 1
 
             if step % grad_acc_steps == 0:
                 torch.nn.utils.clip_grad_norm_(hypernet.parameters(), max_grad_norm)
                 optimizer.step()
+                scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
                 global_step += 1
 
                 if global_step % 10 == 0:
-                    train_loss = running_loss / max(step, 1)
-                    print(f"epoch={epoch+1} step={global_step} train_loss={train_loss:.4f}")
+                    train_loss = window_loss / max(window_steps, 1)
+                    window_loss = 0.0
+                    window_steps = 0
+                    current_lr = scheduler.get_last_lr()[0]
+                    print(f"epoch={epoch+1} step={global_step} train_loss={train_loss:.4f} lr={current_lr:.2e}")
                     log_metrics(
                         run,
                         {
                             "train/loss": train_loss,
+                            "train/lr": current_lr,
                             "train/epoch": epoch + 1,
                             "train/step": global_step,
                         },
@@ -354,6 +377,7 @@ def main() -> None:
             injector,
             eval_loader,
             device=device,
+            lora_alpha=lora_alpha,
         )
         print(f"epoch={epoch+1} validation_loss={val_loss:.4f}")
         if val_loss < best_val_loss:
