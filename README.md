@@ -1,3 +1,6 @@
+
+<img width="2352" height="791" alt="image" src="https://github.com/user-attachments/assets/8cfe7635-36e9-4d23-b538-ba33562fd9f9" />
+
 # STRAW_MHACK
 
 Dynamic hypernetwork-generated LoRA adapters ("STRAW") for multi-domain generative adaptation on:
